@@ -143,6 +143,114 @@ Tuples have only two: `t.count(x)` and `t.index(x)`. Everything else works throu
 ### Handy built-ins for any collection
 `len(x)`, `sum(x)`, `min(x)`, `max(x)`, `any(x)`, `all(x)`, `sorted(x)`, `enumerate(x)`, `zip(a, b)`, `reversed(x)`, `x in c`.
 
+## 7B. The `collections` module: defaultdict, Counter, deque, namedtuple
+`collections` is part of the standard library. It gives specialised versions of the built-in containers.
+
+### defaultdict
+**What it is:** a dict that never raises `KeyError` for a missing key. You give it a **factory** (a function that takes no arguments). When you access a missing key, it calls the factory, **stores** the result under that key, and returns it.
+
+```python
+from collections import defaultdict
+
+# Without defaultdict: you must check the key first
+totals = {}
+for cat, amt in [("food", 120), ("travel", 300), ("food", 80)]:
+    if cat not in totals:
+        totals[cat] = 0
+    totals[cat] += amt
+
+# With defaultdict(int): the missing key starts at int() == 0
+totals = defaultdict(int)
+for cat, amt in [("food", 120), ("travel", 300), ("food", 80)]:
+    totals[cat] += amt            # {'food': 200, 'travel': 300}
+
+# Grouping: defaultdict(list) starts each missing key as []
+groups = defaultdict(list)
+for cat, amt in [("food", 120), ("travel", 300), ("food", 80)]:
+    groups[cat].append(amt)       # {'food': [120, 80], 'travel': [300]}
+```
+
+| Factory | Missing key starts as | Typical use |
+|---|---|---|
+| `int` | `0` | Counting and summing. |
+| `list` | `[]` | Grouping items by a key. |
+| `set` | `set()` | Grouping unique items by a key. |
+| `lambda: "N/A"` | `"N/A"` | Any custom default value. |
+
+**How it works internally:** `defaultdict` is a dict subclass. When `d[key]` fails, Python calls the special method `__missing__`, which runs your factory, inserts the result, and returns it.
+
+**Gotchas:**
+- **Just reading a missing key creates it.** `d["x"]` inserts `"x"` with the default value. `key in d` and `d.get(key)` do **not** insert, so use those to check without side effects.
+- The factory must be a **callable**, not a value: write `defaultdict(list)`, not `defaultdict([])`.
+- Convert back with `dict(d)` if you want a plain dict (for example, before returning JSON).
+
+**vs `setdefault`:** `d.setdefault(k, []).append(x)` does the same job on a plain dict, but `defaultdict(list)` is cleaner when you do it many times.
+
+### Counter
+**What it is:** a dict subclass built for **counting hashable items**. Keys are the items and values are their counts.
+
+```python
+from collections import Counter
+
+words = ["apple", "bob", "cat", "apple", "bob", "apple"]
+c = Counter(words)
+print(c)                    # Counter({'apple': 3, 'bob': 2, 'cat': 1})
+
+c["apple"]                  # 3
+c["zebra"]                  # 0   (missing key gives 0, no KeyError, and is NOT inserted)
+
+c.most_common(2)            # [('apple', 3), ('bob', 2)]  top-N by count
+c.update(["cat", "cat"])    # adds counts: cat becomes 3
+c.total()                   # total of all counts (Python 3.10+)
+list(c.elements())          # expands back: ['apple','apple','apple','bob','bob','cat',...]
+
+Counter("hello")            # counts characters: {'l': 2, 'h': 1, 'e': 1, 'o': 1}
+```
+
+| Operation | What it does |
+|---|---|
+| `Counter(iterable)` | Counts every item in the iterable in one pass. |
+| `c[item]` | Returns the count, or 0 if the item was never seen. |
+| `c.most_common(n)` | Returns the `n` most frequent items as `(item, count)` pairs, highest first. |
+| `c.update(iterable)` | **Adds** counts from another iterable (unlike `dict.update`, which overwrites). |
+| `c.subtract(iterable)` | Subtracts counts, and allows zero or negative results. |
+| `c1 + c2`, `c1 - c2` | Adds or subtracts counts; the result keeps only positive counts. |
+| `c1 & c2`, `c1 \| c2` | Takes the minimum or maximum of each item's count. |
+
+**Counter vs defaultdict(int):** both can count. Use `Counter` when you only need counts (it gives `most_common`). Use `defaultdict(int)` when you add up other values (like amounts) per key.
+
+### deque (double-ended queue)
+**What it is:** a list-like container optimised for adding and removing at **both ends**.
+
+```python
+from collections import deque
+
+q = deque([1, 2, 3])
+q.append(4)         # add right:  [1, 2, 3, 4]
+q.appendleft(0)     # add left:   [0, 1, 2, 3, 4]
+q.pop()             # remove right (returns 4)
+q.popleft()         # remove left  (returns 0), O(1) (a list's pop(0) is O(n))
+
+recent = deque(maxlen=3)   # fixed size: old items fall off automatically
+for x in range(5):
+    recent.append(x)       # ends as deque([2, 3, 4], maxlen=3)
+```
+**Use it for:** queues, "last N items" windows, and breadth-first traversal. **Trade-off:** indexing in the middle (`q[500]`) is O(n), unlike a list.
+
+### namedtuple
+**What it is:** a tuple whose positions also have **names**. It is still immutable and memory-light.
+
+```python
+from collections import namedtuple
+
+Txn = namedtuple("Txn", ["category", "amount"])
+t = Txn("food", 120)
+t.category          # 'food'  (readable access by name)
+t[1]                # 120     (still works by index)
+cat, amt = t        # unpacking still works
+```
+Use it for small read-only records. Later, when you need defaults, type hints or validation, use a `dataclass` (Topic 8).
+
 ## 8. Real-world usage
 - Grouping and counting records (Transaction Processor, analytics).
 - Fast membership checks with sets.
@@ -202,11 +310,22 @@ O(n), because every existing item must shift one position right. Appending at th
 **10. `remove` vs `discard` on a set?**
 `remove` raises `KeyError` if the item is missing, and `discard` does nothing in that case.
 
+**11. What is `defaultdict` and how is it different from a normal dict?**
+A `defaultdict` takes a factory such as `int`, `list` or `set`. When you access a missing key, it calls the factory, stores the result under that key, and returns it, so you never get a `KeyError`. A normal dict raises `KeyError`. The catch is that merely reading a missing key inserts it, so use `in` or `.get()` when you don't want that.
+
+**12. `Counter` vs `defaultdict(int)`?**
+Both count items. `Counter` is built for counting: it counts a whole iterable in one call, returns 0 for missing keys without inserting them, and provides `most_common(n)`. `defaultdict(int)` is more general and fits better when you sum values (like transaction amounts) per key.
+
+**13. When would you use `deque` instead of a list?**
+When you add or remove at the **front**. `deque.popleft()` and `appendleft()` are O(1), while `list.pop(0)` and `list.insert(0, x)` are O(n). It also supports `maxlen` for "last N items" windows. Indexing in the middle is slower than a list.
+
 ## 13. Things to remember
 - Need fast lookup or uniqueness → set or dict.
 - Need ordered, changeable sequence → list. Fixed record → tuple.
 - Use `enumerate` for index + item, `zip` for parallel iteration.
-- `defaultdict` for grouping, `Counter` for counting.
+- `defaultdict(list)` for grouping, `defaultdict(int)` for summing, `Counter` for counting (and `most_common`).
+- Reading a missing key on a `defaultdict` creates it; a `Counter` returns 0 without creating it.
+- `deque` for fast operations at both ends; `namedtuple` for small read-only records.
 - `*middle` in unpacking always becomes a list.
 - `sort()` returns `None`; `sorted()` returns a new list.
 
