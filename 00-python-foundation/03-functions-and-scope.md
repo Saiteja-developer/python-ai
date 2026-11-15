@@ -1,246 +1,342 @@
-# Functions and Scope
+# 03 — Functions and Scope
 
-## 1. Definition
-A **function** is a reusable block of code that takes inputs (parameters), does work, and gives back an output (return value). In Python a function is also an **object**: you can store it in a variable, pass it to another function, and return it from a function.
+> Phase 0 · Python foundation. FastAPI routes, pytest fixtures, Pandas `.apply()`, `lru_cache` for embeddings: all of them are built on the ideas in this file (closures and decorators especially).
+> Running example: a **support-ticket cleaner**.
+> `🎯 Interview:` marks a point worth remembering for interviews. `⚠️ Common confusion:` marks a place where I got stuck, with the reason explained.
 
-**Scope** is the region of code where a name (variable) can be seen and used.
+---
 
-## 2. Why it exists
-- **Reuse:** write once, call many times.
-- **Abstraction:** hide the details behind a name (`total(...)`).
-- **Because functions are objects**, Python can support closures and decorators, which FastAPI, pytest and most libraries rely on.
-- **Scope** keeps names from clashing: a variable inside one function does not accidentally overwrite one in another.
+## 1. Function basics
 
-## 3. Mental model
+### 1.1 Definition
+A **function** is a reusable block of code: it takes inputs (**parameters**), does work, and gives back an output (**return value**). In Python a function is also an **object**: you can store it in a variable, pass it to another function, and return it from a function.
 
-### 3.1 A function is a recipe card with a label
-- `def greet(name): ...` creates the recipe card and sticks the label `greet` on it.
-- `greet("Ann")` (with parentheses) means **cook it now**.
-- `greet` (without parentheses) means **the card itself**. You can hand the card to someone else, or stick a second label on it.
+### 1.2 Important points
+- `def` only **creates** the function. The body runs when you **call** it.
+- `f` is the function itself. `f()` **calls** it.
+- No `return` (or a bare `return`) gives back `None`.
+- `return a, b` returns one **tuple** `(a, b)`.
+- A parameter is the name in `def f(x)`. An argument is the value in `f(5)`.
 
+### 1.3 Example
+**Syntax:**
+```
+def function_name(parameter1, parameter2):
+    """Optional docstring."""
+    ...body...
+    return value              # optional; without it the function returns None
+
+function_name(argument1, argument2)      # call it
+other_name = function_name               # no brackets: a second name for the same function
+```
 ```python
-def greet(name):
-    return f"Hi {name}"
+def clean(text):
+    return text.strip().lower()
 
-say = greet            # second label on the SAME card, nothing runs yet
-print(say("Ann"))      # Hi Ann
+fix = clean                      # second label on the same function (no brackets)
+print(fix("  Refund NOT received "))     # refund not received
 ```
 
-### 3.2 Scope is a set of nested rooms (LEGB)
-When Python meets a name, it searches rooms from the inside out and stops at the first match:
-
-| Letter | Room | Meaning |
-|---|---|---|
-| **L** | Local | Names created inside the current function. |
-| **E** | Enclosing | Names in any outer function that contains the current one. |
-| **G** | Global | Names at the top level of the file or notebook. |
-| **B** | Built-in | Names Python provides, like `len`, `print`, `sum`. |
-
-### 3.3 A closure is a function with a backpack
-When an inner function is created inside an outer function, it carries a **backpack** containing the outer variables it uses. Even after the outer function has finished, the inner function still has its backpack.
-
-### 3.4 A decorator is a gift-wrapper
-A decorator takes a function, wraps it in extra behavior (timing, logging, login check), and hands back the wrapped version. The caller uses the same name, but now gets the extra behavior.
-
-## 4. How it works internally
-
-### 4.1 `def` runs at definition time, the body runs at call time
+### 1.4 ⚠️ Common confusion: `print` vs `return`
 ```python
-def f():
-    print("running")   # NOT printed when `def` executes
-f()                    # printed here
+def clean(text):
+    print(text.strip().lower())          # shows text, returns None
+
+result = clean("  Hello ")               # prints: hello
+print(result)                            # None
 ```
-`def` creates a function object and binds the name. Nothing inside runs until the call.
+`print` only **shows** text on the screen. `return` **hands a value back** so the caller can store it, test it or pass it on. A function that only prints returns `None`. Use `return` for logic and `print` only for display.
 
-### 4.2 Parameters and arguments
-- **Parameter:** the name in the `def` line. **Argument:** the actual value you pass in the call.
+---
 
-| Kind | Example | Meaning |
+## 2. Parameters: the five kinds
+
+| Kind | Written as | Meaning |
 |---|---|---|
 | Positional | `def f(a, b)` | Matched by order: `f(1, 2)`. |
-| Keyword | `f(b=2, a=1)` | Matched by name, so order does not matter. |
-| Default | `def f(a, b=10)` | `b` is optional; the default is used if it's missing. |
+| Default | `def f(a, b=10)` | `b` is optional. |
 | `*args` | `def f(*args)` | Collects extra **positional** arguments into a **tuple**. |
+| Keyword-only | `def f(*args, key)` | Comes after `*args` (or `*`), so it must be passed by name. |
 | `**kwargs` | `def f(**kwargs)` | Collects extra **keyword** arguments into a **dict**. |
-| Keyword-only | `def f(*, key)` or `def f(*args, key)` | Everything after `*` or `*args` must be passed by name. |
-| Positional-only | `def f(a, /, b)` | Everything before `/` must be passed by position. |
 
-Order in a `def` line: positional → defaults → `*args` → keyword-only → `**kwargs`.
+Order in the `def` line: positional → defaults → `*args` → keyword-only → `**kwargs`.
 
+### 2.0 One example for each kind
+**Syntax:**
+```
+def f(a, b)                       # positional
+def f(a, b=10)                    # default value (defaults go after non-defaults)
+def f(*args)                      # extra positional -> tuple
+def f(*args, key)                 # key must be passed by name
+def f(a, *, key)                  # bare * : everything after it is keyword-only
+def f(a, b, /, c)                 # / : everything before it is positional-only
+def f(**kwargs)                   # extra keyword -> dict
+def f(a, b=1, *args, key, **kwargs)     # full order
+f(*my_list, **my_dict)            # unpack when calling
+return a, b                       # returns one tuple
+```
 ```python
-def show(a, b=10, *args, key, **kwargs):
-    print(a, b, args, key, kwargs)
+def greet(name, greeting="Hello"):        # positional + default
+    return f"{greeting}, {name}"
 
-show(1, 2, 3, 4, key="k", x=9)
-# a=1, b=2, args=(3, 4), key="k", kwargs={"x": 9}
+greet("Ann")                  # 'Hello, Ann'      default used
+greet("Ann", "Hi")            # 'Hi, Ann'         by position
+greet(greeting="Yo", name="Bo")   # 'Yo, Bo'      by name: order no longer matters
+```
+```python
+def show(*args):              # *args collects extra positional arguments into a tuple
+    return args
+
+show()           # ()
+show(1)          # (1,)
+show(1, 2, 3)    # (1, 2, 3)
+```
+```python
+def info(**kw):               # **kwargs collects extra keyword arguments into a dict
+    return kw
+
+info()           # {}
+info(a=1, b=2)   # {'a': 1, 'b': 2}
+```
+```python
+def f(a, *, key):             # everything after the bare * must be passed by name
+    return a, key
+
+f(1, key=2)      # (1, 2)
+f(1, 2)          # TypeError: f() takes 1 positional argument but 2 were given
+```
+```python
+def g(a, b, /, c):            # everything before the / must be passed by position
+    return a, b, c
+
+g(1, 2, c=3)           # (1, 2, 3)
+g(a=1, b=2, c=3)       # TypeError: g() got some positional-only arguments passed as keyword arguments: 'a, b'
+```
+Returning many values:
+```python
+def mm(a, b):
+    return a + b, a * b       # one tuple
+
+mm(2, 3)          # (5, 6)
+s, p = mm(2, 3)   # unpack: s = 5, p = 6
 ```
 
-The stars also work in a **call**, where they **unpack**:
+### 2.1 Example
+```python
+def total(*nums, **opts):
+    round_to = opts.get("round_to")        # None if not given
+    if round_to is not None:
+        return round(sum(nums), round_to)
+    return sum(nums)
+
+print(total(1.234, 2.345, round_to=2))     # 3.58
+print(total(1, 2, 3))                      # 6
+print(total())                             # 0
+```
+Here `nums = (1.234, 2.345)` and `opts = {"round_to": 2}`.
+
+### 2.2 Stars in a **call** do the reverse (unpack)
 ```python
 nums = [1, 2]
-opts = {"key": "k"}
-show(*nums, **opts)     # same as show(1, 2, key="k")
+opts = {"round_to": 1}
+total(*nums, **opts)             # same as total(1, 2, round_to=1)
 ```
-- `*` spreads a list/tuple into separate positional arguments.
-- `**` spreads a dict into separate keyword arguments.
+`*` spreads a list or tuple into separate arguments. `**` spreads a dict into keyword arguments.
 
-### 4.3 Return values
-- `return x` sends `x` back and **ends** the function immediately.
-- No `return` (or a bare `return`) gives back `None`.
-- `return a, b` actually returns one **tuple** `(a, b)`, which you can unpack: `x, y = f()`.
+**Real project use:** `Model(**data)` builds a Pydantic model from a dict, and wrappers pass `*args, **kwargs` through to another function.
 
-### 4.4 Arguments are passed by object reference
-The function's parameter becomes a **second label on the same object** (the Topic 1 idea):
-```python
-def add_one(lst):
-    lst.append(1)     # mutates the caller's list
-def rebind(lst):
-    lst = [99]        # only moves the local label; caller unaffected
-```
-Mutating a mutable argument changes the caller's object. Re-assigning the parameter does not.
+---
 
-### 4.5 Scope rules in detail
-**Reading** an outer name works automatically. **Assigning** to a name inside a function creates a **new local** name, unless you declare otherwise.
+## 3. Scope (LEGB)
 
-```python
-count = 0
-def bad():
-    count += 1          # UnboundLocalError
-```
-Python sees `count += 1` as an assignment, so it decides `count` is local to `bad`. But the local `count` has no value yet when `+=` tries to read it, hence `UnboundLocalError`.
+### 3.1 Definition
+**Scope** = where a name can be seen. Python searches from the inside out and stops at the first match:
 
-Two fixes:
-```python
-def good_global():
-    global count        # "use the module-level count"
-    count += 1
-
-def make_counter():
-    count = 0
-    def inc():
-        nonlocal count  # "use the count from the enclosing function"
-        count += 1
-        return count
-    return inc
-```
-
-| Keyword | Refers to | Use |
+| Letter | Scope | Meaning |
 |---|---|---|
-| `global x` | A name at the top level of the module. | Rarely; global state is usually a design smell. |
-| `nonlocal x` | A name in the nearest enclosing **function**. | Closures that must update their own state. |
+| **L** | Local | Names created inside the current function. |
+| **E** | Enclosing | Names in an outer function that contains this one. |
+| **G** | Global | Names at the top level of the file or notebook. |
+| **B** | Built-in | Names Python provides (`len`, `print`, `sum`). |
 
-#### Extra clarity: how Python decides a name is local
-Python decides **before running the function** (when it compiles it). The rule: **if a name is assigned anywhere inside the function, that name is local to the whole function.**
+🎯 **Interview:** "What is the LEGB rule?" Local, Enclosing, Global, Built-in: the order Python looks up a name.
+
+### 3.2 ⚠️ Common confusion: why `count += 1` gives `UnboundLocalError`
 ```python
 x = 10
 
 def read_only():
-    print(x)        # 10. Only reading, so Python finds the global x.
-
-def assign_only():
-    x = 20          # creates a NEW local x; the global x is still 10
-    print(x)        # 20
+    print(x)              # 10  (only reading: Python finds the global x)
 
 def read_then_assign():
-    print(x)        # UnboundLocalError
+    print(x)              # UnboundLocalError
     x = 20
 ```
-Why `read_then_assign` fails: because of `x = 20` further down, Python marks `x` as local for the **entire** function. So `print(x)` looks for the **local** `x`, which has no value yet. It does **not** fall back to the global `x`. In Python 3.13 the message reads `UnboundLocalError: cannot access local variable 'x' where it is not associated with a value` (older versions say "local variable referenced before assignment").
+Python decides **before running** the function: **if a name is assigned anywhere inside it, that name is local to the whole function.** So `print(x)` looks for the **local** `x`, which has no value yet. It does not fall back to the global.
 
-What counts as an assignment (all of these make a name local): `x = ...`, `x += ...`, `for x in ...`, `import x`, `def x`, `with ... as x`.
-`count += 1` secretly means `count = count + 1`, which is why it counts as an assignment.
+`count += 1` secretly means `count = count + 1`, which is an assignment. So this fails too:
+```python
+count = 0
+def bad():
+    count += 1            # UnboundLocalError
+```
+**Fixes:** `global count` (module-level variable) or `nonlocal count` (variable of an enclosing function).
 
 | Situation | What happens |
 |---|---|
-| Only **reading** an outer name | Works automatically; Python searches outward (LEGB). |
-| **Assigning** with no declaration | Creates a new local name; the outer name is untouched. |
-| Reading then assigning the same name | `UnboundLocalError`, because the name is local but has no value yet. |
-| Assigning with `global` or `nonlocal` declared | Changes the outer name as you intended. |
+| Only **reading** an outer name | Works (Python searches outward). |
+| **Assigning** it with no declaration | Creates a new local name; the outer one is untouched. |
+| Reading, then assigning the same name | `UnboundLocalError`. |
+| Assigning with `global` / `nonlocal` declared | Changes the outer name. |
 
-### 4.6 Closures step by step
+**Syntax:**
+```
+global name        # inside a function: "name is the module-level variable"
+nonlocal name      # inside an inner function: "name is the enclosing function's variable"
+```
+**`global` in action:**
+```python
+x = 10
+def change():
+    global x          # "x means the module-level x"
+    x = 20
+
+change()
+print(x)              # 20
+```
+**Reading an enclosing name (no keyword needed):**
+```python
+def outer():
+    y = 1
+    def inner():
+        return y + 1  # only reads y
+    return inner()
+
+outer()               # 2
+```
+
+---
+
+## 4. Closures
+
+### 4.1 Definition
+A **closure** is an inner function that **remembers the variables** of the outer function it was created in, even after the outer function has finished. Think of it as a function carrying a **backpack**.
+
+### 4.2 Example: a counter that remembers
+**Syntax (closure pattern):**
+```
+def outer(parameter):
+    remembered = ...
+    def inner(argument):
+        nonlocal remembered       # only if you re-assign it
+        ...use parameter / remembered...
+        return result
+    return inner                  # no brackets: return the function itself
+```
 ```python
 def make_counter():
     count = 0
     def inc():
-        nonlocal count
+        nonlocal count        # we will re-assign the enclosing variable
         count += 1
         return count
-    return inc          # returns the function, NOT inc()
-
-c = make_counter()      # make_counter finishes, but inc keeps `count` alive
-print(c(), c(), c())    # 1 2 3
-d = make_counter()      # a brand new call, so a brand new `count`
-print(d())              # 1
-```
-Trace:
-1. `make_counter()` runs: creates `count = 0` and the function `inc`.
-2. It returns `inc` (the function object). The variable `count` is **not** destroyed, because `inc` still uses it.
-3. `c` now points to `inc`. Each `c()` updates that same `count`: 1, 2, 3.
-4. `d = make_counter()` runs the outer function again, creating a **separate** `count`. So `d()` starts at 1 and `c`'s count is unaffected.
-
-Why `return inc` and not `return inc()`:
-- `inc` is the function itself (what we want to hand back).
-- `inc()` would call it right now and return the number `1`, and `c` would just be an int.
-
-#### Extra clarity: why `nonlocal` is needed, and what the closure remembers
-**Experiment 1: remove `nonlocal`.**
-```python
-def make_counter():
-    count = 0
-    def inc():
-        count += 1          # no nonlocal
-        return count
-    return inc
+    return inc                # return the function itself, NOT inc()
 
 c = make_counter()
-c()    # UnboundLocalError: cannot access local variable 'count' ...
+print(c(), c(), c())          # 1 2 3
+d = make_counter()            # a brand new call: a brand new count
+print(d())                    # 1
 ```
-This is the same rule as 4.5: `count += 1` is an assignment, so `count` becomes a **local** variable of `inc`, and it has no value yet. `nonlocal count` tells Python "this name belongs to the enclosing function; do not create a new local".
+**How it works:**
+1. `make_counter()` creates `count = 0` and the function `inc`, then returns `inc`.
+2. `count` is **not** destroyed, because `inc` still uses it (it is in `inc`'s backpack).
+3. Each `c()` updates that same `count`: 1, 2, 3.
+4. `make_counter()` again creates a **separate** `count`, so `d()` starts at 1.
 
-**When you do NOT need `nonlocal`:** if the inner function only **reads** the outer variable.
+### 4.3 ⚠️ Common confusion: `nonlocal`, and `return inc` vs `return inc()`
+**Why `nonlocal`?** Without it, `count += 1` is an assignment, so `count` becomes local to `inc` and fails with `UnboundLocalError` (same rule as 3.2). `nonlocal count` says "this name belongs to the enclosing function".
+
+**When you do not need it:** if the inner function only **reads** the variable.
 ```python
 def make_multiplier(n):
     def multiply(x):
-        return x * n        # only reading n, so no nonlocal needed
+        return x * n          # only reading n: no nonlocal needed
     return multiply
 
 double = make_multiplier(2)
-double(5)                   # 10
+print(double(5))              # 10
 ```
-Rule: **read-only → nothing needed. Re-assigning → `nonlocal`.**
+**Rule:** read-only → nothing needed. Re-assigning → `nonlocal`.
 
-**Experiment 2: look inside the "backpack".** Every closure stores its remembered variables in "cells".
+**`return inc` vs `return inc()`:**
+
+| Written as | What `c` becomes |
+|---|---|
+| `return inc` | The inner **function**, so `c()` works and counts 1, 2, 3. |
+| `return inc()` | The **number** `1` (the function was run right now), so `c()` gives `TypeError: 'int' object is not callable`. |
+
+**Rule of thumb:** brackets mean "run it now". No brackets mean "hand the function over to run later".
+
+**See the backpack:**
 ```python
-c = make_counter()                 # the version WITH nonlocal
-c.__code__.co_freevars             # ('count',)   names the function borrows from outside
-c.__closure__[0].cell_contents     # 0   the current value of count
-c(); c()
-c.__closure__[0].cell_contents     # 2
+c = make_counter()
+c.__code__.co_freevars            # ('count',)   what it borrows from outside
+c.__closure__[0].cell_contents    # 0   current value (updates as you call c())
 ```
-This shows that `count` is not a copy: the inner function and the cell share the **same** variable, and every call updates it.
 
-**Experiment 3: `return inc` vs `return inc()`.**
+**Real project use:** build a configured function once and reuse it.
+```python
+def make_score_filter(min_score):
+    def keep(result):
+        return result["score"] >= min_score
+    return keep
 
-| Written as | What `c` becomes | What `c()` does |
-|---|---|---|
-| `return inc` | The inner **function** itself. | Runs it and returns `1`, then `2`, then `3`. |
-| `return inc()` | The **number** `1` (the result of calling `inc` once, right now). | `TypeError: 'int' object is not callable`, because `c` is just an int. |
+good = list(filter(make_score_filter(0.8), results))    # keep only strong search matches
+```
 
-Rule of thumb: **parentheses mean "run it now"; no parentheses mean "hand the function over to be run later".**
+---
 
-### 4.7 Decorators step by step
+## 5. Decorators
+
+### 5.1 Definition
+A **decorator** is a function that **takes a function and returns a new function** that wraps it with extra behaviour (timing, logging, a login check, caching). Writing `@name` above a `def` is shorthand:
+```python
+@timed
+def load_tickets(): ...
+# is exactly the same as:
+def load_tickets(): ...
+load_tickets = timed(load_tickets)
+```
+
+### 5.2 Example: time any function
+**Syntax (decorator pattern):**
+```
+from functools import wraps
+
+def decorator_name(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        ...do something before...
+        result = fn(*args, **kwargs)
+        ...do something after...
+        return result
+    return wrapper
+
+@decorator_name              # same as: my_func = decorator_name(my_func)
+def my_func(...): ...
+```
 ```python
 import time
 from functools import wraps
 
-def timed(fn):                              # fn = the original function
-    @wraps(fn)
-    def wrapper(*args, **kwargs):           # accepts anything
-        start = time.perf_counter()
-        result = fn(*args, **kwargs)        # run the original
+def timed(fn):                                  # fn = the original function
+    @wraps(fn)                                  # keep the original name and docstring
+    def wrapper(*args, **kwargs):               # accept ANY arguments
+        start = time.perf_counter()             # precise clock, in seconds
+        result = fn(*args, **kwargs)            # run the original function
         end = time.perf_counter()
         print(f"{fn.__name__} took {end - start:.4f}s")
-        return result                       # give back the original's result
+        return result                           # give back the original's result
     return wrapper
 
 @timed
@@ -249,56 +345,16 @@ def big_sum():
 
 print(big_sum())
 ```
-**What `@timed` really does.** This:
-```python
-@timed
-def big_sum(): ...
-```
-is exactly the same as:
-```python
-def big_sum(): ...
-big_sum = timed(big_sum)
-```
-Trace:
-1. Python defines the original `big_sum`.
-2. It calls `timed(big_sum)`. Inside, `fn` is the original `big_sum`.
-3. `timed` returns `wrapper`, and the name `big_sum` is now bound to `wrapper`.
-4. When you call `big_sum()`, you are really calling `wrapper()`, which starts the timer, calls the original via `fn(...)`, stops the timer, prints, and returns the original's result.
-5. `wrapper` is a **closure**: it remembers `fn` in its backpack. This is why closures come before decorators.
+**Result:** a line like `big_sum took 0.0085s`, then `499999500000`.
 
-Pieces explained:
-- `*args, **kwargs` in `wrapper` lets it accept **any** arguments and pass them straight through to `fn`, so the decorator works on any function.
-- `fn(*args, **kwargs)` calls the original (the stars unpack the collected arguments again).
-- `time.perf_counter()` returns a high-precision clock reading in seconds. Subtract two readings to get elapsed time. (Use it instead of `time.time()` for timing code.)
-- `functools.wraps(fn)` copies `fn`'s name and docstring onto `wrapper`. Without it, `big_sum.__name__` would say `"wrapper"`, which confuses debugging and tools such as FastAPI and pytest.
-- `return result` is essential. If you forget it, the decorated function returns `None`.
-
-**A decorator that takes arguments** needs one more layer:
-```python
-def repeat(n):                      # outer: receives the decorator's argument
-    def decorator(fn):              # middle: receives the function
-        @wraps(fn)
-        def wrapper(*args, **kwargs):   # inner: runs on each call
-            for _ in range(n):
-                result = fn(*args, **kwargs)
-            return result
-        return wrapper
-    return decorator
-
-@repeat(3)
-def hello(): print("hi")
-```
-`@repeat(3)` first calls `repeat(3)`, which returns `decorator`, and then `decorator` is applied to `hello`.
-
-#### Extra clarity: when does each line of a decorator run?
-Add print statements to see the order:
+### 5.3 ⚠️ Common confusion: when does each line run?
 ```python
 def timed(fn):
     print("1. timed() is running, decorating", fn.__name__)
     def wrapper(*args, **kwargs):
         print("3. wrapper is running")
         result = fn(*args, **kwargs)
-        print("4. original finished, returning its result")
+        print("4. original finished")
         return result
     print("2. timed() finished, returning wrapper")
     return wrapper
@@ -310,728 +366,447 @@ def greet():
 print("--- decorated, now calling ---")
 print(greet())
 ```
-Output:
+**Result:**
 ```
 1. timed() is running, decorating greet
 2. timed() finished, returning wrapper
 --- decorated, now calling ---
 3. wrapper is running
-4. original finished, returning its result
+4. original finished
 hi
 ```
-- Steps **1 and 2 run once**, at the moment the function is defined (that is when `@timed` is applied).
-- Steps **3 and 4 run on every call** to `greet()`.
+- Steps **1 and 2 run once**, when the function is defined.
+- Steps **3 and 4 run on every call**. After decoration, the name `greet` points to `wrapper`.
+- `wrapper` is a **closure**: it remembers `fn` in its backpack. That is why closures come before decorators.
 
-**What `fn(*args, **kwargs)` means.** The wrapper is defined as `wrapper(*args, **kwargs)`, which **packs** whatever arguments it receives into a tuple and a dict. Then `fn(*args, **kwargs)` **unpacks** them again and passes them to the original function.
-```python
-def greet2(name, punct="!"):
-    return f"hi {name}{punct}"
+**What `fn(*args, **kwargs)` means:** the wrapper's `*args, **kwargs` **pack** whatever it receives, and `fn(*args, **kwargs)` **unpacks** it again for the original. Called as `f("Ann", punct="?")`, the wrapper gets `args=("Ann",)`, `kwargs={"punct": "?"}` and calls `fn("Ann", punct="?")`.
 
-# decorated greet2, called as: greet2("Ann", punct="?")
-# wrapper receives  args = ("Ann",)   kwargs = {"punct": "?"}
-# fn(*args, **kwargs) becomes  greet2("Ann", punct="?")
-```
-
-**Why we store `result` in a variable.** We have to call the original, then stop the clock, then return. A `return` ends the function immediately, so we first save the original's return value in `result`, do our extra work (print the time), and only then `return result`.
-
-**What breaks if you leave out each part:**
+**Why save `result` in a variable?** We must run the original, **then** stop the clock, **then** return. `return` ends the function at once, so we store the value first.
 
 | If you forget this | What happens |
 |---|---|
 | `return result` | The decorated function always returns `None`. |
-| `*args, **kwargs` in the wrapper | `TypeError: wrapper() takes 0 positional arguments but 1 was given` as soon as the function has arguments. |
-| The call `fn(...)` | The original function never runs. |
-| `return wrapper` (written as `return wrapper()` instead) | The wrapper runs at decoration time and breaks. Parentheses mean "run now". |
-| `@wraps(fn)` | Everything still works, but `greet.__name__` says `"wrapper"` and docstrings are lost. |
+| `*args, **kwargs` in the wrapper | `TypeError` as soon as the function has arguments. |
+| The call `fn(...)` | The original never runs. |
+| `@wraps(fn)` | It still works, but `greet.__name__` becomes `"wrapper"` and the docstring is lost. |
 
-**The fill-in-the-blank version, solved:** in `result = ___(*args, **kwargs)` the blank is **`fn`** (the original function), and in `return ___` the blank is **`result`**.
+🎯 **Interview:** `@decorator` means `f = decorator(f)`. The decorator runs once at definition; the wrapper runs on every call.
 
-### 4.8 Lambda
-`lambda x: x * 2` is a small **anonymous function** limited to **one expression** (no statements, no assignments). It returns that expression's value automatically.
-```python
-double = lambda x: x * 2
-sorted(["bb", "a", "ccc"], key=lambda s: len(s))   # ['a', 'bb', 'ccc']
+### 5.4 A decorator that takes an argument needs one more layer
+**Syntax:**
 ```
-Use lambdas for short throwaway functions, mainly as `key=` arguments. For anything longer, use `def`.
+def decorator_with_arg(arg):          # 1st layer: gets the argument
+    def decorator(fn):                # 2nd layer: gets the function
+        @wraps(fn)
+        def wrapper(*args, **kwargs): # 3rd layer: runs on each call
+            ...
+        return wrapper
+    return decorator
 
-### 4.9 The late-binding closure trap
+@decorator_with_arg(3)
+def my_func(...): ...
+```
+```python
+def repeat(n):                    # outer: receives the argument
+    def decorator(fn):            # middle: receives the function
+        @wraps(fn)
+        def wrapper(*args, **kwargs):     # inner: runs on each call
+            for _ in range(n):
+                result = fn(*args, **kwargs)
+            return result
+        return wrapper
+    return decorator
+```
+`@repeat(3)` first calls `repeat(3)`, which returns `decorator`, which is then applied to the function.
+
+**Real project use:** `@app.get("/tickets")` in FastAPI registers your function as a route (it is a decorator that stores your function in a table of routes). Logging, auth checks, retry and caching are usually decorators.
+
+---
+
+## 6. Lambda and the late-binding trap
+
+### 6.1 Definition
+A **lambda** is a small anonymous function with **one expression**: `lambda x: x * 2`. It returns that expression's value. Use it for short throwaway functions, mostly as a `key=`. For anything longer, use `def`.
+
+### 6.2 ⚠️ Common confusion: why `[2, 2, 2]`?
 ```python
 fs = [lambda: i for i in range(3)]
-print([f() for f in fs])     # [2, 2, 2]  (not [0, 1, 2])
+print([f() for f in fs])         # [2, 2, 2]   (not [0, 1, 2])
 ```
-- Each lambda does not store the **value** of `i`. It stores a link to the **variable** `i`, and looks it up **when it is called**.
-- By the time you call them, the loop has finished and `i` is `2`, so all three return `2`.
+Each lambda does **not** store the **value** of `i`. It stores a link to the **variable** `i` and looks it up **when it is called**. By then the loop has finished and `i == 2`. All three lambdas share the same variable:
+```python
+fs[0].__closure__[0] is fs[1].__closure__[0]     # True
+```
 
-**Fix:** use a default argument. Defaults are evaluated **when the lambda is created**, so each lambda keeps its own copy:
+| Fix | Code | Why it works |
+|---|---|---|
+| Default argument | `lambda i=i: i` | The default is evaluated when the lambda is **created**, so each lambda keeps its own copy. |
+| Factory function | `def make(i): return lambda: i` | Each call to `make` creates a new scope with its own `i`. |
+| `functools.partial` | `partial(show, i)` | `partial` stores the current value at creation time. |
+
 ```python
 fs = [lambda i=i: i for i in range(3)]
-print([f() for f in fs])     # [0, 1, 2]
+print([f() for f in fs])         # [0, 1, 2]
 ```
-`i=i` means: the parameter named `i` gets its default from the current loop variable `i` at creation time.
+**Rule:** a closure remembers the **variable**, not the value it had at that moment. The same trap applies to a normal `def` inside a loop.
 
-#### Extra clarity: proving that all the lambdas share one variable
+**Syntax:**
+```
+lambda parameters: expression       # no return keyword; one expression only
+lambda x: x * 2                     lambda a, b: a + b       lambda: 5
+```
+**Lambda basics (3 examples):**
 ```python
-fs = [lambda: i for i in range(3)]
-fs[0].__closure__[0].cell_contents                 # 2   (the final value of i)
-fs[0].__closure__[0] is fs[1].__closure__[0]       # True: all lambdas share the SAME cell
+sq = lambda x: x * x
+sq(4)                                    # 16
+(lambda a, b: a + b)(2, 3)               # 5     a lambda used on the spot
+sorted(["bb", "a", "ccc"], key=lambda s: -len(s))   # ['ccc', 'bb', 'a']   longest first
+list(map(lambda x: x * 2, [1, 2, 3]))    # [2, 4, 6]
+list(filter(lambda x: x > 1, [1, 2, 3])) # [2, 3]
 ```
-All three lambdas hold the same cell, and that cell holds the **latest** value of `i`. So whichever lambda you call, you get the latest value.
+A function can be passed like any value:
+```python
+def apply(fn, value):
+    return fn(value)
 
-Three ways to fix it:
+apply(str.upper, "hi")     # 'HI'
+apply(len, "abc")          # 3
+callable(apply)            # True     is it something you can call?
+callable(5)                # False
+```
 
-| Fix | Code | How it works |
+---
+
+## 7. map, filter, reduce and `key=`
+
+### 7.1 Definition
+These process a sequence **with a function instead of a loop**. They are **higher-order functions** (they take a function as an argument).
+
+| Tool | Its one job | Result size |
 |---|---|---|
-| Default argument | `lambda i=i: i` | The default is evaluated when the lambda is created, so each lambda stores its own copy of the current `i`. |
-| Factory function | `def make(i): return lambda: i` then `[make(i) for i in range(3)]` | Each call to `make` creates a new scope with its own `i`, so each lambda closes over a different variable. |
-| `functools.partial` | `partial(show, i)` | `partial` stores the current value as a fixed argument at creation time. |
+| `map(f, items)` | **Transform** every item. | Same number of items. |
+| `filter(f, items)` | **Keep** items where `f(item)` is true. | Same or fewer. |
+| `reduce(f, items, start)` | **Combine** all items into one value. | One value. |
 
-The same trap applies to a normal `def` inside a loop, not only to lambdas. The rule: **a closure remembers the variable, not the value it had at that moment.**
+### 7.2 map and filter
+**Syntax:**
+```
+map(function, iterable)                  # new iterator of function(item) for every item
+map(function, iterable1, iterable2)      # function gets one item from each
+filter(function, iterable)               # keeps items where function(item) is truthy
+filter(None, iterable)                   # keeps truthy items
+list(map(...))   list(filter(...))       # needed to see the results
+```
+```python
+texts = ["  Refund ", "", "LOGIN issue", "   "]
 
-### 4.10 Docstrings
-A **docstring** is a string written as the very first statement of a function. It documents what the function does.
+stripped = map(str.strip, texts)             # a map object, not a list!
+print(list(stripped))                        # ['Refund', '', 'LOGIN issue', '']
+print(list(stripped))                        # []   already used up
+
+non_empty = list(filter(None, map(str.strip, texts)))
+print(non_empty)                             # ['Refund', 'LOGIN issue']
+```
+**Important points:**
+- In Python 3, `map` and `filter` return **lazy iterators**. They compute one item at a time, only when you loop over them or call `list()`.
+- An iterator can be used **once**. After that it is **exhausted** (empty).
+- `filter(None, items)` keeps only **truthy** items (drops `""`, `0`, `None`, `[]`).
+- `map(print, items)` prints nothing, because nothing consumes it. For side effects use a `for` loop.
+- `map` with two iterables passes one item from each and stops at the shortest.
+- The same results with comprehensions: `[t.strip() for t in texts if t.strip()]`. Prefer comprehensions when the logic is new; use `map`/`filter` when a named function already exists.
+
+### 7.3 reduce
+**Syntax:**
+```
+from functools import reduce
+reduce(function, iterable, initial_value)      # function(accumulator, item) -> new accumulator
+```
+`reduce` is in `functools` (not built-in), so `from functools import reduce`. It keeps an **accumulator** (the running result) and combines it with the next item. The function takes exactly **two arguments**.
+```python
+from functools import reduce
+
+texts = ["refund", "login issue", "late delivery"]
+total_chars = reduce(lambda acc, t: acc + len(t), texts, 0)
+print(total_chars)                           # 6 + 11 + 13 = 30
+```
+Step by step (start value `0`): `0 + 6 = 6` → `6 + 11 = 17` → `17 + 13 = 30`.
+- The third argument is the **initializer** (the starting value).
+- Empty input **without** an initializer raises `TypeError`. **With** one, it returns the initializer. So always give one if the input might be empty.
+- Prefer built-ins when they exist: `sum`, `math.prod`, `max`, `min`, `all`, `any`, `"".join(...)`. Here `sum(map(len, texts))` does the same job. Use `reduce` only for a custom combining rule.
+
+### 7.4 `key=` functions (`sorted`, `min`, `max`)
+**Syntax:**
+```
+sorted(iterable, key=function, reverse=False)
+min(iterable, key=function)      max(iterable, key=function)
+lst.sort(key=function, reverse=False)
+```
+`key` is called **once per item** to get a sort value. Items are compared by those values, but the **original items** are returned.
+```python
+words = ["bb", "a", "ccc"]
+sorted(words, key=len)                       # ['a', 'bb', 'ccc']
+max(words, key=len)                          # 'ccc'
+sorted(results, key=lambda r: r["score"], reverse=True)[:3]    # top-3 search results
+```
+Sorting is stable (equal keys keep their order). A tuple key sorts by several fields: `key=lambda p: (p.age, p.name)`.
+
+| `map` / `filter` | List comprehension |
+|---|---|
+| They return lazy iterators that can be used only once, so nothing is computed until you loop or call `list()`. | A list comprehension builds the whole list in memory at once, and a list can be looped over many times. |
+| They need a function, and a long lambda makes them hard to read. | The expression and the condition are written inline, which is usually easier to read. |
+
+🎯 **Interview:** `map` returns a lazy iterator, not a list. `reduce` needs an import and an initializer for safety. Prefer comprehensions and built-ins.
+
+**Real project use:** Pandas `Series.map()` and `.apply()` pass a function to every value. In RAG: `map(embed, chunks)` to embed every chunk, `filter` to drop results below a score threshold.
+
+---
+
+## 8. functools: partial and lru_cache
+
+### 8.1 partial: pre-fill some arguments
+**Syntax:**
+```
+from functools import partial
+new_function = partial(original_function, argument_or_keyword=value)
+```
+```python
+from functools import partial
+
+def chunk_text(text, size):
+    return [text[i:i + size] for i in range(0, len(text), size)]
+
+chunk_100 = partial(chunk_text, size=100)      # a new function with size fixed
+print(chunk_100("a" * 250)[1][:3])             # 'aaa'
+```
+Use it to adapt a function to something that expects fewer arguments (callbacks, `map`).
+
+### 8.2 lru_cache: remember results (memoization)
+**Syntax:**
+```
+from functools import lru_cache
+
+@lru_cache(maxsize=128)        # maxsize=None means unlimited
+def my_func(hashable_args): ...
+
+my_func.cache_info()           my_func.cache_clear()
+```
+**Memoization** = store a function's result so the same call returns instantly next time. (LRU = least recently used: when full, the oldest unused result is dropped.)
+```python
+from functools import lru_cache
+
+@lru_cache(maxsize=1000)
+def embed(text):                    # imagine this calls a paid embedding API
+    print("calling the model for:", text)
+    return [float(len(text))]
+
+embed("refund")                     # prints, computes
+embed("refund")                     # instant, no print: served from the cache
+print(embed.cache_info())           # hits=1, misses=1, ...
+```
+**Important points:**
+- The cache is a **dict keyed by the arguments**, so arguments must be **hashable** (a `str` is fine; a `list` raises `TypeError`).
+- Only cache **pure** functions (same input → same output). Caching something that reads the time or a database returns stale answers.
+- Famous example: `fib(n)` without a cache is exponential (about 2ⁿ calls); with `@lru_cache` it is linear (about n).
+- Another common use: `@lru_cache def get_settings(): ...` in FastAPI, so configuration loads once.
+
+---
+
+## 9. Recursion, docstrings, pure functions
+
+### 9.1 Recursion
+**Syntax (template):**
+```
+def solve(problem):
+    if problem_is_small_enough:        # base case: stop here
+        return answer
+    return combine(solve(smaller_problem))      # the function calls itself
+```
+A **recursive** function calls itself on a **smaller** problem. It needs a **base case** (when to stop), or you get `RecursionError` (the default limit is about 1000 nested calls).
+```python
+def fact(n):
+    if n <= 1:                 # base case
+        return 1
+    return n * fact(n - 1)     # smaller problem each time
+
+print(fact(5))                 # 120
+```
+Each call gets its own local scope on the **call stack** and waits until the call below it returns.
+
+**Real project use:** the **recursive text splitter** in RAG chunking. Split by paragraphs; if a piece is still too long, split it by lines, then by words, until every piece fits. Simplified version:
+```python
+def split_recursive(text, max_len, seps=("\n\n", "\n", " ")):
+    if len(text) <= max_len:                       # base case: it already fits
+        return [text]
+    if not seps:                                   # nothing left to split on: hard cut
+        return [text[i:i + max_len] for i in range(0, len(text), max_len)]
+    pieces = text.split(seps[0])
+    out = []
+    for p in pieces:
+        out.extend(split_recursive(p, max_len, seps[1:]))
+    return out
+```
+(Real splitters also merge small pieces back together; this shows the recursive idea.)
+
+Two more recursion examples:
+```python
+def countdown(n):
+    if n == 0:                 # base case
+        print("done")
+        return
+    print(n)
+    countdown(n - 1)
+
+countdown(3)                   # 3 / 2 / 1 / done
+
+def total(items):              # sum of a nested list
+    s = 0
+    for x in items:
+        s += total(x) if isinstance(x, list) else x
+    return s
+
+total([1, [2, 3], [4, [5]]])   # 15
+```
+
+### 9.2 Docstring
+**Syntax:**
+```
+def name(params):
+    """One-line summary."""          # first statement in the function
+
+    # or several lines:
+    """Summary line.
+
+    Longer explanation, arguments, return value.
+    """
+```
+A string written as the **first statement** of a function. It documents it. Python keeps it in `f.__doc__`, `help(f)` shows it, and FastAPI uses it in the generated API docs.
 ```python
 def area(r):
     """Return the area of a circle with radius r."""
     return 3.14159 * r * r
-
-print(area.__doc__)     # Return the area of a circle with radius r.
-help(area)              # prints the signature and the docstring
 ```
-- Python stores it in the function's `__doc__` attribute.
-- Convention: a one-line summary in triple quotes; for longer functions add a blank line, then details such as parameters and return value.
-- Tools read it: `help()`, IDE hover text, and **FastAPI**, which shows it in the auto-generated API docs.
-
-### 4.11 Recursion
-A **recursive** function calls itself. Every recursive function needs:
-1. A **base case**: the condition where it stops and returns directly.
-2. A **recursive case**: a call to itself with a **smaller** problem that moves toward the base case.
-
 ```python
-def fact(n):
-    if n <= 1:              # base case
-        return 1
-    return n * fact(n - 1)  # recursive case
-
-print(fact(5))              # 120
+area.__doc__          # 'Return the area of a circle with radius r.'
+area.__name__         # 'area'
+help(area)            # prints the docstring in a readable form
 ```
-Trace of `fact(3)`:
-```
-fact(3) -> 3 * fact(2)
-              fact(2) -> 2 * fact(1)
-                           fact(1) -> 1          (base case)
-              fact(2) = 2 * 1 = 2
-fact(3) = 3 * 2 = 6
-```
-- Each call gets its **own local scope** and sits on the **call stack** until the call below it returns.
-- Without a base case (or with a wrong one) the calls never stop, and Python raises `RecursionError` once the stack gets too deep. The default limit is about 1000 calls (`sys.getrecursionlimit()`).
-- Python does **not** optimise tail calls, so very deep recursion should be rewritten as a loop.
-- Use recursion for naturally nested data (trees, folders, nested JSON). Use loops for simple repetition.
 
-### 4.12 `map`, `filter`, `reduce` and `key=` (in detail)
-These three tools process a sequence **with a function instead of a loop**. They are **higher-order functions**: they receive another function as an argument.
+### 9.3 Pure vs impure
+- A **pure** function depends only on its inputs and has **no side effects**.
+- A **side effect** is anything besides returning a value: printing, writing a file, changing a global or a mutable argument, calling an API.
 
-| Tool | Its one job | Result size |
+Pure functions are easy to test, cache and reuse. Keep the core logic pure and push side effects (I/O, API calls) to the edges of your program.
+
+---
+
+## 10. Patterns to remember
+
+| Pattern | Template | Used for |
 |---|---|---|
-| `map` | **Transform** every item. | Same number of items as the input. |
-| `filter` | **Keep** only the items that pass a test. | Same or fewer items. |
-| `reduce` | **Combine** all items into one value. | A single value. |
+| **Pure helper** | `def f(x): return ...` (no print, no globals) | Cleaning, scoring, chunking: easy to test. |
+| **Config factory (closure)** | `def make_x(setting): def x(value): ...; return x` | Build a function once with settings, reuse it. |
+| **Decorator** | `def deco(fn): @wraps(fn) def wrapper(*a, **k): ...; return wrapper` | Timing, logging, retry, auth. |
+| **Decorator with argument** | three layers: `outer(arg)` → `decorator(fn)` → `wrapper(...)` | `@retry(3)`. |
+| **Registry decorator** | store `fn` in a dict and `return fn` | Routes, tool lists, plugins. |
+| **Cache** | `@lru_cache(maxsize=...)` on a pure function with hashable arguments | Embeddings, settings, slow lookups. |
+| **Sort or filter by rule** | `sorted(items, key=...)`, `filter(fn, items)` | Top-K, thresholds. |
+| **Recursion** | base case, then a smaller call | Splitters, nested data. |
 
-#### `map(function, iterable, *more_iterables)`
-Calls `function` on every item and gives back the results.
+**Config factory** (a closure, verified):
 ```python
-nums = [1, 2, 3, 4]
-result = map(lambda x: x * 2, nums)
-print(result)          # <map object at 0x...>   NOT a list
-print(list(result))    # [2, 4, 6, 8]
-print(list(result))    # []   the map object is already used up
-```
-How it works:
-- In Python 3, `map` returns a **lazy iterator**: it computes **one item at a time, only when you ask for the next one** (by looping or calling `list()`). Nothing is calculated when you write `map(...)`.
-- An iterator can be consumed **only once**. After you loop over it, it is **exhausted** (empty). To use the results again, store them with `list(...)`.
-- Laziness saves memory for big inputs, because the full result list never exists at once.
+def make_cleaner(lower=True, min_len=0):
+    def clean(text):
+        text = " ".join(text.split())
+        if lower:
+            text = text.lower()
+        return text if len(text) >= min_len else None
+    return clean
 
-Passing a named function is the most common use:
+clean = make_cleaner(min_len=3)
+clean("  Hello   World ")      # 'hello world'
+clean("a")                     # None   too short
+```
+**Retry decorator** (a decorator with an argument, verified):
 ```python
-list(map(int, ["1", "2", "3"]))        # [1, 2, 3]  convert strings to ints
-list(map(str.upper, ["a", "b"]))       # ['A', 'B']
-list(map(len, ["hi", "hello"]))        # [2, 5]
-```
-`map` with two (or more) iterables passes one item from each, and stops at the shortest (like `zip`):
-```python
-list(map(lambda a, b: a + b, [1, 2, 3], [10, 20]))   # [11, 22]
-```
-Same result with a comprehension: `[x * 2 for x in nums]`.
-
-#### `filter(function, iterable)`
-Keeps an item only if `function(item)` is **truthy**.
-```python
-nums = [1, 2, 3, 4]
-list(filter(lambda x: x % 2 == 0, nums))      # [2, 4]
-list(filter(None, [0, 1, "", None, [], "a"])) # [1, 'a']   None as the function keeps only truthy items
-```
-- `filter` is also a **lazy iterator** and is exhausted after one pass.
-- The function is a **test**: it should answer yes or no. It does not change the items. (To change items, use `map`.)
-- Truthy and falsy: `0`, `""`, `None`, `[]`, `{}` and `False` are falsy; most other values are truthy.
-- Same result with a comprehension: `[x for x in nums if x % 2 == 0]`.
-
-#### `reduce(function, iterable, initializer)`
-`reduce` lives in `functools` (it is **not** a built-in in Python 3), so you must import it: `from functools import reduce`.
-
-It repeatedly combines two things: the **accumulator** (the running result so far) and the **next item**. The function takes exactly **two arguments** and returns the new accumulator.
-```python
-from functools import reduce
-reduce(lambda acc, x: acc + x, [1, 2, 3, 4])     # 10
-```
-Step by step (no initializer, so the first item becomes the starting accumulator):
-```
-acc = 1                        (first item)
-acc = 1 + 2 = 3                (next item 2)
-acc = 3 + 3 = 6                (next item 3)
-acc = 6 + 4 = 10               (next item 4)   -> result 10
-```
-With an **initializer** (a starting value), the accumulator starts from it:
-```python
-reduce(lambda acc, x: acc + x, [1, 2, 3, 4], 100)   # 110
-```
-```
-acc = 100
-acc = 100 + 1 = 101 ... acc = 110
-```
-Empty input:
-- **Without** an initializer, `reduce(f, [])` raises `TypeError: reduce() of empty iterable with no initial value`.
-- **With** an initializer, it simply returns the initializer. So use an initializer whenever the input could be empty.
-
-More examples:
-```python
-reduce(lambda a, b: a * b, [1, 2, 3, 4])               # 24   product
-reduce(lambda a, b: a if a > b else b, [3, 9, 2])      # 9    maximum
-reduce(lambda a, b: a + b, [[1], [2, 3]], [])          # [1, 2, 3]  flatten (works but slow for big data)
-```
-**Prefer built-ins when they exist.** They are clearer and faster:
-
-| Instead of this `reduce` | Use this |
-|---|---|
-| `reduce(lambda a, b: a + b, nums)` | `sum(nums)` |
-| `reduce(lambda a, b: a * b, nums)` | `math.prod(nums)` |
-| `reduce(lambda a, b: a if a > b else b, nums)` | `max(nums)` (or `min(nums)` for the smallest) |
-| `reduce(lambda a, b: a and b, flags)` | `all(flags)` |
-| `reduce(lambda a, b: a or b, flags)` | `any(flags)` |
-| `reduce(lambda a, b: a + b, list_of_strings)` | `"".join(list_of_strings)` |
-
-Use `reduce` only when the combining rule is custom and no built-in matches.
-
-#### Chaining the three
-Sum of the squares of the even numbers from 1 to 10:
-```python
-from functools import reduce
-nums = range(1, 11)
-evens   = filter(lambda x: x % 2 == 0, nums)       # 2, 4, 6, 8, 10
-squares = map(lambda x: x * x, evens)              # 4, 16, 36, 64, 100
-total   = reduce(lambda a, b: a + b, squares)      # 220
-```
-The same job in the usual Python style: `sum(x * x for x in range(1, 11) if x % 2 == 0)`, which gives `220`.
-
-#### `map` / `filter` vs list comprehension
-| `map` / `filter` | List comprehension |
-|---|---|
-| `map` and `filter` return lazy iterators, so nothing is computed until you loop over them or call `list()`. | A list comprehension builds the whole list in memory immediately, while a generator expression with round brackets `(...)` is lazy. |
-| They need a function, and with a lambda the logic becomes hard to read once it is more than trivial. | The expression and the condition are written inline, which is usually easier to read. |
-| They are neat when a named function already exists, such as `map(int, strings)`. | They are neat when the logic is new, because you do not need to create a function first. |
-| A `map` or `filter` object can be consumed only once and is then empty. | A list can be looped over any number of times. |
-
-#### The `operator` module: functions for operators
-Writing `lambda a, b: a + b` is wasteful. The standard-library module `operator` provides ready-made functions for operators.
-```python
-import operator
-from functools import reduce
-
-reduce(operator.add, [1, 2, 3])        # 6    same as a + b
-reduce(operator.mul, [1, 2, 3, 4])     # 24   same as a * b
-
-from operator import itemgetter, attrgetter
-people = [("bob", 30), ("ann", 25)]
-sorted(people, key=itemgetter(1))      # sort by index 1 (age): [('ann', 25), ('bob', 30)]
-# itemgetter("score") works on dicts too; attrgetter("age") works on object attributes
-```
-
-#### `key=` functions (`sorted`, `min`, `max`)
-`key` is a function that is called **once per item** to produce a **sort value**. The items are compared by their key values, but the **original items** are returned.
-```python
-words = ["bb", "a", "ccc"]
-sorted(words, key=len)                      # ['a', 'bb', 'ccc']
-max(words, key=len)                         # 'ccc'
-sorted(words, key=len, reverse=True)        # ['ccc', 'bb', 'a']   biggest first
-results = [{"id": 1, "score": 0.4}, {"id": 2, "score": 0.9}]
-sorted(results, key=lambda r: r["score"], reverse=True)   # best score first
-sorted(people, key=lambda p: (p[1], p[0]))  # sort by age, ties broken by name (a tuple as the key)
-```
-Sorting is **stable**: items with equal keys keep their original order.
-
-#### Mistakes to avoid with `map` / `filter` / `reduce`
-- Printing a `map` or `filter` object and expecting items. Wrap it in `list(...)`.
-- Using the same `map` object twice. The second use is empty.
-- Calling `map(print, items)` for its side effect: nothing prints until something consumes it. Use a normal `for` loop for side effects.
-- Forgetting `from functools import reduce`.
-- Calling `reduce` on a possibly empty list without an initializer.
-- A `reduce` function that does not take exactly two arguments.
-- Giving `filter` a function that returns a transformed value instead of a yes/no. `filter(lambda x: x * 2, [0, 1, 2])` keeps `[1, 2]` because it tests whether `x * 2` is truthy; it does not double anything.
-
-### 4.13 `functools.partial`
-`partial` **fixes some arguments** of an existing function and gives you a new function that needs only the rest.
-```python
-from functools import partial
-
-def power(base, exp):
-    return base ** exp
-
-square = partial(power, exp=2)     # exp is now fixed at 2
-cube   = partial(power, exp=3)
-print(square(5), cube(5))          # 25 125
-```
-Use it to adapt a function to an interface that wants fewer arguments (callbacks, `map`, `sorted(key=...)`), instead of writing a small wrapper or lambda.
-
-### 4.14 `functools.lru_cache` (memoization)
-**Memoization** means remembering the result of a call so that repeating the same call returns instantly. `lru_cache` does this with a decorator. (LRU = "least recently used": when the cache is full it drops the entry used longest ago.)
-```python
-from functools import lru_cache
-
-@lru_cache(maxsize=None)           # maxsize=None means unlimited
-def fib(n):
-    return n if n < 2 else fib(n - 1) + fib(n - 2)
-
-print(fib(35))                     # instant
-print(fib.cache_info())            # hits, misses, size
-fib.cache_clear()                  # empty the cache
-```
-- Without the cache, `fib(n)` recomputes the same values again and again, which takes **exponential** time (about 2^n calls). With the cache each value is computed once, so it takes **linear** time (about n calls).
-- Internally the cache is a dict keyed by the call's arguments, so **arguments must be hashable** (Topic 2). Lists and dicts as arguments raise `TypeError`.
-- Python 3.9+ also has `functools.cache`, a shortcut for `lru_cache(maxsize=None)`.
-- Only cache **pure** functions (see 4.15). Caching a function that reads changing data (the time, a database) returns stale results. Unlimited caches can also use a lot of memory.
-
-### 4.15 Pure and impure functions
-- A **pure function** depends only on its arguments and has **no side effects**: same input always gives the same output, and it changes nothing outside itself.
-- A **side effect** is anything a function does besides returning a value: printing, writing a file, modifying a global, changing a mutable argument, calling an API.
-```python
-def add(a, b):            # pure
-    return a + b
-
-total = 0
-def add_to_total(x):      # impure: changes a global
-    global total
-    total += x
-
-def append_one(lst):      # impure: mutates its argument
-    lst.append(1)
-```
-Pure functions are easy to **test** (no setup), easy to **cache**, and safe to reuse. Aim to keep the core logic pure and push side effects (I/O, printing, database calls) to the edges of your program.
-
-### 4.16 Inspecting functions and placeholders
-```python
-callable(len)               # True: can it be called?
-add.__name__                # 'add'
-add.__doc__                 # its docstring
-import inspect
-inspect.signature(add)      # <Signature (a, b)>
-
-def todo():
-    pass                    # does nothing; a placeholder so the body is not empty
-def todo2():
-    ...                     # Ellipsis; also commonly used as a placeholder
-```
-`inspect.signature` is how frameworks such as FastAPI read your function's parameters to build routes and validation.
-
-### 4.17 Function topics covered in other notes
-| Feature | Where it is covered |
-|---|---|
-| Type hints on parameters and returns (`def f(x: int) -> str`) | Topic 8: type hints, dataclasses, Pydantic. |
-| Generator functions (`yield`) | Topic 6: iterators and generators. |
-| `__call__` (making an object callable like a function) | Topic 5 and 6: OOP and magic methods. |
-| Raising and handling errors inside functions | Topic 7: error handling. |
-| `async def` functions | Phase 3: async Python and FastAPI. |
-
-## 5. Important terminology
-| Term | Simple meaning |
-|---|---|
-| Parameter | The name in the `def` line (`def f(a)`: `a`). |
-| Argument | The actual value passed when calling (`f(5)`: `5`). |
-| First-class function | A function that can be stored, passed and returned like any value. |
-| Higher-order function | A function that takes or returns another function (`sorted(key=...)`, decorators). |
-| `*args` | Extra positional arguments collected into a tuple. |
-| `**kwargs` | Extra keyword arguments collected into a dict. |
-| Keyword-only argument | Must be passed by name; comes after `*` or `*args`. |
-| Scope | The region where a name is visible. |
-| LEGB | Lookup order: Local, Enclosing, Global, Built-in. |
-| Closure | An inner function that remembers variables of its enclosing function. |
-| `nonlocal` | Lets an inner function re-assign an enclosing function's variable. |
-| `global` | Lets a function re-assign a module-level variable. |
-| Decorator | A function that takes a function and returns a wrapped replacement. |
-| Lambda | A one-expression anonymous function. |
-| Late binding | A closure looks up a variable when called, not when created. |
-| `functools.wraps` | Copies the original function's metadata onto a wrapper. |
-| `perf_counter` | A high-precision clock for timing code. |
-| Docstring | A string as the first statement of a function that documents it; stored in `__doc__`. |
-| Recursion | A function calling itself on a smaller problem. |
-| Base case | The condition where a recursive function stops and returns directly. |
-| Call stack | The pile of active function calls; each call sits on it until it returns. |
-| Higher-order function | A function that takes or returns functions (`map`, `filter`, `sorted(key=)`, decorators). |
-| `map` / `filter` / `reduce` | Apply a function to every item / keep matching items / combine all items into one. |
-| `partial` | Makes a new function with some arguments of another function pre-filled. |
-| Memoization | Remembering a function's results so repeated calls return instantly. |
-| `lru_cache` | A decorator that memoizes; drops the least recently used entries when full. |
-| Pure function | Output depends only on inputs, with no side effects. |
-| Side effect | Anything a function does besides returning a value (printing, I/O, changing outside state). |
-| Iterator | An object that hands out items one at a time with `next()`. `map` and `filter` return iterators. |
-| Lazy evaluation | Computing a value only when it is asked for, not in advance. |
-| Exhausted | An iterator that has already given all its items and is now empty. |
-| Accumulator | The running result that `reduce` carries from step to step. |
-| Initializer | The optional starting value for `reduce`'s accumulator. |
-| Truthy / falsy | A value that counts as true / false in a condition (`0`, `""`, `None`, `[]` are falsy). |
-| Cell | The storage slot where a closure keeps a remembered variable (`f.__closure__`). |
-| `operator` module | Standard-library functions for operators (`operator.add`, `itemgetter`) used instead of lambdas. |
-
-## 6. Example (small)
-```python
-def total(*nums, **opts):
-    round_to = opts.get("round_to")       # None if the key is missing
-    if round_to is not None:
-        return round(sum(nums), round_to)
-    return sum(nums)
-
-total(1.234, 2.345, round_to=2)   # 3.58
-total(1, 2, 3)                    # 6
-total()                           # 0 (sum of an empty tuple)
-```
-`nums` is a tuple `(1.234, 2.345)` and `opts` is a dict `{"round_to": 2}`. `.get()` avoids a `KeyError` when the option is absent.
-
-## 7. Code example (full)
-```python
-import time
 from functools import wraps
 
-# 1. Closure: a counter that remembers its own state
-def make_counter():
-    count = 0
-    def inc():
-        nonlocal count
-        count += 1
-        return count
-    return inc
+def retry(times):
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            for attempt in range(1, times + 1):
+                try:
+                    return fn(*args, **kwargs)
+                except Exception as e:
+                    print("attempt", attempt, "failed:", e)
+                    if attempt == times:
+                        raise              # out of attempts: let the error out
+        return wrapper
+    return decorator
 
-c = make_counter()
-print(c(), c(), c())      # 1 2 3
-print(make_counter()())   # 1  (a fresh, separate counter)
+calls = {"n": 0}
 
-# 2. Lambda trap and fix
-bad  = [lambda: i for i in range(3)]
-good = [lambda i=i: i for i in range(3)]
-print([f() for f in bad])    # [2, 2, 2]
-print([f() for f in good])   # [0, 1, 2]
+@retry(3)
+def flaky():
+    calls["n"] += 1
+    if calls["n"] < 3:
+        raise ValueError("boom")
+    return "ok"
 
-# 3. Decorator
-def timed(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        start = time.perf_counter()
-        result = fn(*args, **kwargs)
-        print(f"{fn.__name__} took {time.perf_counter() - start:.4f}s")
-        return result
-    return wrapper
-
-@timed
-def big_sum():
-    return sum(range(1_000_000))
-
-print(big_sum())
+print(flaky())
+# attempt 1 failed: boom
+# attempt 2 failed: boom
+# ok
 ```
+(`try` / `except` is explained in Topic 08. For now: `try` runs the code, `except` runs if it raised an error.)
 
-## 8. Real-world usage (and how it connects to Track 2)
-
-**FastAPI routes are decorators.** `@app.get("/hello")` stores your function in a table of routes. The core idea in a few lines:
+**Registry decorator** (this is how `@app.get("/tickets")` works inside FastAPI, simplified, verified):
 ```python
 routes = {}
 
-def get(path):                   # a decorator that takes an argument
+def route(path):
     def decorator(fn):
-        routes[path] = fn        # register the function under a URL
-        return fn
+        routes[path] = fn      # store the function under its path
+        return fn              # give the same function back
     return decorator
 
-@get("/hello")
-def hello():
-    """Say hello."""
-    return {"msg": "hi"}
+@route("/tickets")
+def list_tickets():
+    return ["t1", "t2"]
 
-routes["/hello"]()               # {'msg': 'hi'}
+@route("/health")
+def health():
+    return "ok"
+
+print(sorted(routes))          # ['/health', '/tickets']
+print(routes["/tickets"]())    # ['t1', 't2']
 ```
-FastAPI does the same, and also uses `inspect.signature` to read your parameters (to validate input) and your docstring (to write the API docs).
 
-**Dependency injection passes functions around.** In `Depends(get_db)`, you give FastAPI the function `get_db`, and FastAPI calls it for you on every request.
+---
 
-**Caching with `@lru_cache`.** Two very common uses:
-```python
-from functools import lru_cache
+## 11. Use this when building (project guide)
 
-@lru_cache
-def get_settings():              # load configuration once, reuse everywhere
-    return load_config()
+- **FastAPI:** `@app.get(...)` is a registry decorator. Route functions are plain functions with parameters, so the parameter kinds (defaults, keyword arguments) decide the URL options.
+- **RAG pipeline:** write each step as a small pure function (`clean`, `split`, `embed`, `score`). Use `lru_cache` on `embed`, `partial` or a config factory to fix chunk size, and `sorted(..., key=...)` for top-K.
+- **Pandas:** `df["col"].apply(clean)` and `.map(fn)` take a function. Your `clean` from Topic 03 plugs straight in.
+- **Pytest later:** pure functions are the easiest to test. Fixtures and parametrization are built on decorators.
+- **Production code:** timing, logging, retry and auth are decorators, so you write them once.
 
-@lru_cache(maxsize=1000)
-def embed(text):                 # str arguments are hashable, so they can be cached
-    return call_embedding_model(text)
-```
-Caching embeddings of repeated text saves time and API cost. Only do this for a function whose result depends only on its input.
+**Checklist:** does the function **return** (not print) its result? Are mutable defaults avoided? Can I make the core logic pure? Am I looping and building lambdas (late-binding trap)? Do I need `@wraps`?
 
-**Closures build configured functions.** A relevance filter for RAG search results:
-```python
-def make_score_filter(min_score):
-    def keep(result):
-        return result["score"] >= min_score
-    return keep
+---
 
-good = list(filter(make_score_filter(0.8), results))
-```
-**Sorting with `key=` gives top-K results:** `sorted(results, key=lambda r: r["score"], reverse=True)[:5]`.
+## 🧠 Quick Revision
 
-**Recursion.** Walking nested JSON or folders, and the **recursive text splitter** used in RAG chunking: try to split by paragraphs; if a piece is still too big, split it by sentences; then by words, until every piece fits the chunk size. The base case is "this piece already fits".
-
-**`map`, `filter`, `reduce` and their cousins:**
-- Pandas has `Series.map(func)` and `.apply(func)` (transform each value), boolean masks like `df[df["amount"] > 100]` (a vectorised `filter`), and `groupby(...).agg(...)` (a `reduce` per group).
-- In RAG code: embed each chunk (`map`), drop results below a similarity threshold (`filter`), and merge many dictionaries of metadata into one (`reduce`).
-
-**`*args` and `**kwargs`.** Decorators forward them. Pydantic models are built from dictionaries with `Model(**data)`. `requests.get(url, **options)` forwards options.
-
-**Decorators for timing and logging.** Measure how long an embedding call or an API request takes; log calls to find slow paths. `@pytest.fixture` and `@pytest.mark.parametrize` are decorators too.
-
-**Pure functions.** Data-cleaning steps in a pipeline written as pure functions are trivial to test with pytest. Keep printing, file writing and database calls at the edges.
-
-## 9. Common mistakes
-- Forgetting `nonlocal`/`global` when re-assigning an outer variable, which causes `UnboundLocalError`.
-- Writing `return inc()` instead of `return inc` when you want to hand back the function.
-- Forgetting `return result` in a decorator's wrapper, so the decorated function returns `None`.
-- Forgetting `*args, **kwargs` in a wrapper, so it breaks on functions with arguments.
-- Forgetting `@wraps`, so the function's name becomes `wrapper`.
-- Late binding in loops (`lambda: i`). Fix it with `lambda i=i: i`.
-- A mutable default argument (`def f(x, l=[])`).
-- Calling a function when you meant to pass it (`apply(fn(), x)` instead of `apply(fn, x)`).
-- Using `global` for state that should be passed in or returned.
-- Putting long logic in a lambda instead of a normal `def`.
-- Recursion with no base case, or a base case that is never reached, which gives `RecursionError`.
-- Forgetting that `map` and `filter` return lazy iterators; printing them shows an object, not the items. Wrap in `list(...)`.
-- Using `lru_cache` on an impure function (stale results) or passing unhashable arguments (lists, dicts).
-- Hiding side effects (printing, changing globals or arguments) inside functions that look like they only compute a value.
-- `map`/`filter`/`reduce` pitfalls: printing the iterator object, reusing an exhausted iterator, forgetting `from functools import reduce`, `reduce` on empty input without an initializer, and `map(print, ...)` doing nothing because it is lazy.
-
-## 10. Performance considerations
-- Function calls have a small cost; do not avoid functions for speed in normal code.
-- A decorator adds one extra call layer per invocation; usually negligible, but it matters in extremely hot loops.
-- `functools.lru_cache` can make a repeated pure function dramatically faster by remembering results.
-- Use `time.perf_counter()` for timing; `time.time()` is less precise.
-- Closures keep their captured variables alive in memory, so avoid capturing huge objects you don't need.
-
-## 11. Security considerations
-- Decorators are the standard place for authentication and permission checks (`@login_required`). A missing or mis-ordered decorator can leave an endpoint unprotected.
-- Do not log secrets in timing or logging decorators: `*args, **kwargs` may contain passwords or tokens.
-- Never use `eval()` or `exec()` on user input to build functions.
-- Global mutable state shared across requests can leak one user's data to another.
-
-## 12. Interview questions and answers
-
-**1. What is the LEGB rule?**
-Python looks up a name in four scopes in order: Local (current function), Enclosing (outer functions), Global (module level), Built-in (Python's own names). It uses the first match it finds.
-
-**2. `*args` vs `**kwargs`?**
-`*args` collects extra positional arguments into a tuple. `**kwargs` collects extra keyword arguments into a dict. In a call, `*` and `**` do the reverse and unpack a sequence or a dict into arguments.
-
-**3. What is a closure? What does `nonlocal` do?**
-A closure is an inner function that remembers the variables of the enclosing function it was created in, even after that function has returned. `nonlocal` lets the inner function re-assign such a variable. Without it, assignment would create a new local variable.
-
-**4. Why does `[lambda: i for i in range(3)]` give `[2, 2, 2]`?**
-The lambdas capture the variable `i`, not its value at that moment, and look it up when called. After the loop `i` is 2. Fix with a default argument: `lambda i=i: i`.
-
-**5. What are keyword-only arguments?**
-Parameters after `*` or `*args` in a `def` line. They must be passed by name, for example `def f(*, key)` requires `f(key=1)`. This makes calls clearer and prevents mistakes with argument order.
-
-**6. What is a decorator, and what does `@timed` do?**
-A decorator is a function that takes a function and returns a new function wrapping it with extra behavior. `@timed` above `def f` is equivalent to `f = timed(f)`.
-
-**7. Why use `functools.wraps`?**
-It copies the original function's `__name__`, docstring and other metadata onto the wrapper, so debugging, documentation and tools such as FastAPI and pytest still see the real function.
-
-**8. Why use `*args, **kwargs` inside a decorator's wrapper?**
-So the same decorator works on functions with any signature. The wrapper accepts everything and forwards it unchanged to the original.
-
-**9. `global` vs `nonlocal`?**
-`global x` refers to a variable at module level. `nonlocal x` refers to a variable in the nearest enclosing function (not the module). Both are needed only to re-assign, not to read.
-
-**10. What does a function return if there is no `return` statement?**
-`None`.
-
-**11. Is Python pass-by-value or pass-by-reference?**
-Neither exactly: it is pass-by-object-reference. The parameter becomes another label on the same object, so mutating a mutable argument affects the caller, but re-assigning the parameter does not.
-
-**12. What is a lambda, and when should you avoid it?**
-A one-expression anonymous function, handy for `key=` arguments. Avoid it for anything complex or reused, because a named `def` is clearer and easier to debug.
-
-**13. What is recursion? What is a base case?**
-Recursion is a function calling itself on a smaller version of the problem. The base case is the condition that stops the calls and returns directly. Without it Python raises `RecursionError` once the call stack passes its limit (about 1000 calls by default).
-
-**14. `map`/`filter` vs a list comprehension?**
-They do similar jobs. `map` and `filter` return lazy iterators and take a function; a comprehension builds a list directly and is usually more readable. In Python the comprehension is the preferred style, and `map`/`filter` shine when you already have a named function to pass.
-
-**15. What does `functools.partial` do?**
-It creates a new function from an existing one with some arguments fixed. `square = partial(power, exp=2)` gives a function that only needs `base`.
-
-**16. How does `lru_cache` work, and when should you not use it?**
-It stores results in a dict keyed by the call's arguments and returns the stored result on repeat calls, dropping the least recently used entries when `maxsize` is reached. Arguments must be hashable. Do not use it on impure functions (results depend on time, files, a database) or when the cache could grow without bound.
-
-**17. What is a pure function and why does it matter?**
-A pure function returns the same output for the same input and has no side effects. It is easy to test, cache and reuse, and it makes bugs easier to locate.
-
-**18. Why is a naive recursive Fibonacci slow, and how do you fix it?**
-Each call spawns two more, recomputing the same values many times, so the work grows exponentially (about 2^n). Memoization (`@lru_cache`) computes each value once, making it linear (about n calls). A loop also works.
-
-**19. What does `map` return in Python 3, and what is the catch?**
-A lazy iterator (a `map` object), not a list. It computes items only when you loop over it or call `list()`, and it can be consumed only once; a second pass gives nothing. Wrap it in `list(...)` if you need the results more than once.
-
-**20. How does `reduce` work? What is the initializer for?**
-`reduce(f, items, init)` keeps an accumulator. It starts with `init` (or the first item if there is no initializer), then repeatedly sets `acc = f(acc, next_item)`, and finally returns `acc`. The initializer gives a starting value and makes empty input safe; without it, an empty iterable raises `TypeError`.
-
-**21. How does `filter(None, items)` behave?**
-It keeps only the truthy items and drops `0`, `""`, `None`, `[]`, `{}` and `False`.
-
-**22. Why does `map(print, [1, 2])` print nothing?**
-Because `map` is lazy. Nothing runs until the iterator is consumed (for example by `list(...)` or a `for` loop). Use a plain `for` loop when you want side effects.
-
-**23. When should you use `reduce`, and when not?**
-Use it only for a custom combining rule that no built-in covers. For sums, products, minimum, maximum, all/any and joining strings, use `sum`, `math.prod`, `min`, `max`, `all`, `any` and `"".join`, which are clearer and faster.
-
-**24. How does `sorted(items, key=f)` work?**
-It calls `f` once on each item to get a sort value, orders the items by those values, and returns the original items in that order (a new list). The sort is stable, so equal keys keep their original order. Use a tuple key such as `(age, name)` to sort by several fields.
-
-**25. Why does a closure need `nonlocal` to update a variable, but not to read one?**
-Any assignment inside a function makes that name local to the function. Reading an outer variable just finds it by the LEGB search. Re-assigning without `nonlocal` would create a new local variable, so `count += 1` fails with `UnboundLocalError`.
-
-**26. In `@timed`, when does the decorator body run versus the wrapper body?**
-The decorator function (`timed`) runs once, when the decorated function is defined, and returns the wrapper. The wrapper runs on every call of the decorated function.
-
-## 13. Things to remember
-- `f` is the function, `f()` calls it.
-- Extra positional arguments go into `*args` (tuple); extra keyword arguments go into `**kwargs` (dict).
-- Re-assigning an outer variable needs `nonlocal` (enclosing function) or `global` (module).
-- To hand back a function, `return inner`, not `return inner()`.
-- `@decorator` means `f = decorator(f)`.
-- A decorator's wrapper needs `*args, **kwargs`, a call to the original, and `return result`.
-- Always add `@wraps(fn)` in a decorator.
-- Lambdas in loops: use `lambda i=i: i`.
-- Defaults are evaluated once at definition time; never use a mutable default.
+- A function is an **object**. `f` is the function, `f()` calls it. No `return` → `None`. `print` shows, `return` hands back.
+- Parameters: positional, default, `*args` (tuple), keyword-only, `**kwargs` (dict). Stars in a **call** unpack.
+- **LEGB** lookup. Assigning inside a function makes the name local, so `count += 1` needs `nonlocal` (enclosing function) or `global` (module). Reading needs nothing.
+- **Closure** = inner function + remembered outer variables. `return inner` (the function), not `inner()`.
+- **Decorator**: `@d` above `def f` means `f = d(f)`. The decorator runs once; the wrapper runs on every call. Wrapper pattern: `*args, **kwargs`, call `fn`, `return result`, add `@wraps(fn)`.
+- **Lambda** in a loop captures the **variable**, not the value: use `lambda i=i: i`.
+- `map` transforms, `filter` keeps, `reduce` combines (give an initializer). `map`/`filter` are lazy and one-use: wrap in `list()`. Prefer comprehensions and built-ins (`sum`, `max`, `"".join`).
+- `key=` is called once per item; `sorted(x, key=..., reverse=True)[:k]` gives top-K.
+- `partial(f, size=100)` pre-fills arguments. `@lru_cache` remembers results: hashable arguments, pure functions only.
 - Recursion needs a base case and a smaller problem each call.
-- `map`/`filter` are lazy: use `list(...)`; prefer comprehensions for readability.
-- `partial(f, x=1)` pre-fills arguments; `@lru_cache` remembers results (hashable arguments, pure functions only).
-- Pure function = same input gives same output, no side effects.
-- The first string in a function is its docstring; `help(f)` shows it.
-
-## 14. One-page revision summary
-- **Function = object.** `def` creates it; `f()` calls it; `f` alone is the object. No `return` means `None`.
-- **Parameters:** positional, default, `*args` (tuple), keyword-only, `**kwargs` (dict). Stars in a call unpack.
-- **Scope:** LEGB lookup. Assigning inside a function makes a new local unless `global` or `nonlocal` is declared. `count += 1` without the declaration raises `UnboundLocalError`.
-- **Closure:** inner function + remembered outer variables. `return inner` (the function), not `inner()`.
-- **Decorator:** `@d` above `def f` equals `f = d(f)`. Pattern: `def d(fn): @wraps(fn) def wrapper(*a, **k): ...; r = fn(*a, **k); ...; return r; return wrapper`.
-- **Lambda:** one-expression anonymous function. Late-binding trap: `lambda: i` sees the final `i`; fix with `lambda i=i: i`.
-- **Timing:** `time.perf_counter()` before and after; subtract.
-- **Arguments are passed by object reference** (Topic 1): mutation is visible to the caller, re-assignment is not.
-- **Docstring:** first string in the function; read with `help(f)` or `f.__doc__`.
-- **Recursion:** base case + smaller recursive call; default depth limit about 1000; use loops for simple repetition.
-- **map / filter / reduce:** `map` transforms every item, `filter` keeps items passing a test, `reduce` combines all items into one value (`from functools import reduce`; accumulator + next item; add an initializer for empty input). `map` and `filter` are lazy one-use iterators, so wrap in `list()`. Prefer comprehensions, and prefer built-ins (`sum`, `max`, `all`, `"".join`) over `reduce`. `key=` takes a function called once per item (`sorted(x, key=len)`).
-- **Why `nonlocal`:** any assignment inside a function makes the name local, so re-assigning an enclosing variable needs `nonlocal`; reading needs nothing.
-- **Decorator timing:** the decorator body runs once at definition; the wrapper runs on every call. A wrapper needs `*args, **kwargs`, a call to `fn`, and `return result`.
-- **Closure rule:** a closure remembers the variable, not its value at that moment (late binding).
-- **partial:** `partial(f, exp=2)` returns a new function with `exp` fixed.
-- **lru_cache:** memoizes results in a dict keyed by arguments (must be hashable); turns exponential Fibonacci into linear; use on pure functions only.
-- **Pure vs impure:** pure = same input, same output, no side effects; keep core logic pure, side effects at the edges.
-
-## 15. Practice to redo, with solutions
-
-**1. `@log_calls` decorator**
-```python
-from functools import wraps
-
-def log_calls(fn):
-    @wraps(fn)
-    def wrapper(*args, **kwargs):
-        print(f"Calling {fn.__name__} with args={args} kwargs={kwargs}")
-        return fn(*args, **kwargs)
-    return wrapper
-
-@log_calls
-def add(a, b=0):
-    return a + b
-
-print(add(2, b=3))
-# Calling add with args=(2,) kwargs={'b': 3}
-# 5
-```
-
-**2. `make_multiplier(n)` closure**
-```python
-def make_multiplier(n):
-    def multiply(x):
-        return x * n          # n lives in the closure's "backpack"
-    return multiply
-
-double = make_multiplier(2)
-triple = make_multiplier(3)
-print(double(5), triple(5))   # 10 15
-```
-No `nonlocal` is needed because `n` is only read, never re-assigned.
-
-**3. Why does this fail?**
-```python
-x = 10
-def f():
-    print(x)      # UnboundLocalError
-    x = 20
-f()
-```
-Because `x = 20` appears inside `f`, Python treats `x` as a **local** variable for the **whole** function. So `print(x)` tries to read the local `x` before it has a value. Fix: remove the assignment, or add `global x` at the top of `f` if you really mean the module-level `x`.
-
-**4. Recursion and caching**
-```python
-from functools import lru_cache
-
-def fact(n):
-    return 1 if n <= 1 else n * fact(n - 1)
-
-def fib_slow(n):
-    return n if n < 2 else fib_slow(n - 1) + fib_slow(n - 2)
-
-@lru_cache(maxsize=None)
-def fib_fast(n):
-    return n if n < 2 else fib_fast(n - 1) + fib_fast(n - 2)
-
-# time fib_slow(32) vs fib_fast(32) using your @timed decorator
-```
-
-**5. `partial`**
-```python
-from functools import partial
-def power(base, exp): return base ** exp
-square = partial(power, exp=2)
-cube = partial(power, exp=3)
-print(square(5), cube(5))     # 25 125
-```
-
-**6. `map`, `filter`, `reduce`**
-```python
-from functools import reduce
-nums = [1, 2, 3, 4, 5, 6]
-
-print(list(map(lambda x: x * 3, nums)))               # [3, 6, 9, 12, 15, 18]
-print(list(filter(lambda x: x % 2 == 1, nums)))       # [1, 3, 5]
-print(reduce(lambda acc, x: acc + x, nums))           # 21
-print(reduce(lambda acc, x: acc + x, [], 0))          # 0  (initializer makes empty input safe)
-
-# Sum of squares of even numbers, chained:
-print(reduce(lambda a, b: a + b,
-             map(lambda x: x * x, filter(lambda x: x % 2 == 0, nums))))   # 4 + 16 + 36 = 56
-```
-Predict first, then run: what does `m = map(lambda x: x + 1, nums); list(m); list(m)` return the second time? (Answer: `[]`, because the iterator is exhausted.)
+- Pure function = same input, same output, no side effects.
+- Keyword-only: put `*` before the name. Positional-only: put `/` after the name. `callable(x)` tests if you can call it.
